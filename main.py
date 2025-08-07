@@ -1,4 +1,7 @@
-import os
+from __future__ import annotations
+
+
+import sys
 import pygame
 
 
@@ -15,12 +18,47 @@ BLACK: tuple[int] = (0, 0, 0)
 WHITE: tuple[int] = (255, 255, 255)
 
 
-def draw_window(
-    screen: pygame.Surface,
-    circle_surface: pygame.Surface,
-    circle_x: float,
-    circle_y: float,
-) -> None:
+class Bird(object):
+    def __init__(self: Bird, x: int, y: int, surface: pygame.Surface) -> None:
+        self.__x = x
+        self.__y = y
+        self.__velocity = 0.0
+        self.__gravity = 0.5
+        self.__jump_force = -10.0
+        self.__surface = surface
+
+    def movement(self: Bird) -> None:
+        self.__velocity += self.__gravity
+        self.__y += self.__velocity
+
+        # Clamp: Prevent bird from falling below the screen
+        if self.__y + self.__surface.get_height() >= SCREEN_HEIGHT:
+            self.__y = SCREEN_HEIGHT - self.__surface.get_height()
+            self.__velocity = 0.0
+
+        if self.__y <= 0:
+            self.__y = 0
+
+    def jump(self: Bird) -> None:
+        self.__velocity = self.__jump_force
+
+    def draw(self: Bird, screen: pygame.Surface) -> None:
+        screen.blit(self.__surface, [self.__x, self.__y])
+
+    @property
+    def x(self: Bird) -> float:
+        return self.__x
+
+    @property
+    def y(self: Bird) -> float:
+        return self.__y
+
+    @property
+    def velocity(self: Bird) -> float:
+        return self.__velocity
+
+
+def draw_window(screen: pygame.Surface) -> None:
     """
     Draws and updates the game window with the current frame content.
 
@@ -35,7 +73,8 @@ def draw_window(
     # Fill the screen with blue
     screen.fill(BLUE)
 
-    screen.blit(circle_surface, (circle_x, circle_y))
+    # Draw bird to the screen
+    bird.draw(screen)
 
     # Update the screen
     pygame.display.flip()
@@ -72,11 +111,10 @@ def handle_keys_pressed_event(keys_pressed: pygame.key.ScancodeWrapper) -> None:
         of all keyboard keys, where each key is either True (pressed) or False (not pressed).
     """
     if keys_pressed[pygame.K_ESCAPE]:
-        os._exit(1)
+        sys.exit(1)
 
-    global circle_velocity
     if keys_pressed[pygame.K_SPACE]:
-        circle_velocity = jump_force
+        bird.jump()
 
 
 def main() -> None:
@@ -102,30 +140,15 @@ def main() -> None:
 
     clock: pygame.time.Clock = pygame.time.Clock()
 
-    # Circle surface
-    circle_surface: pygame.Surface = pygame.Surface([100, 100])
-    circle_surface.fill(BLACK)
+    SIZE: int = 100
 
-    # Rectangle surface
-    rectangle_surface: pygame.Surface = pygame.Surface([100, 100])
-    rectangle_surface.fill(BLACK)
+    bird_surface: pygame.Surface = pygame.Surface([SIZE, SIZE])
+    bird_surface.fill(BLACK)
+    pygame.draw.circle(bird_surface, GREEN, [SIZE // 2, SIZE // 2], 30)
 
-    # Initial position of the circle (bird)
-    circle_y: int = 250
-
-    # X position stays constant (like Flappy Bird)
-    circle_x: int = SCREEN_WIDTH // 2 - 50
-
-    # Falling speed (velocity)
-    global circle_velocity
-    circle_velocity = 0.0
-
-    # Gravity that pulls the circle down
-    gravity: float = 0.5
-
-    # Force applied when jumping
-    global jump_force
-    jump_force = -10.0
+    # Initialize Bird object
+    global bird
+    bird = Bird(70, 90, bird_surface)
 
     # Game loop
     while running:
@@ -141,17 +164,14 @@ def main() -> None:
         # Get keys pressed
         keys_pressed: pygame.key.ScancodeWrapper = pygame.key.get_pressed()
 
+        # Movement
+        bird.movement()
+
         # Handle keys pressed
         handle_keys_pressed_event(keys_pressed)
 
         # Draw window
-        draw_window(screen, circle_surface, circle_x, circle_y)
-
-        # Apply gravity to velocity
-        circle_velocity += gravity
-
-        # Update circle's Y position based on velocity
-        circle_y += circle_velocity
+        draw_window(screen)
 
     # Look at the name
     pygame.display.quit()
