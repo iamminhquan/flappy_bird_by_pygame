@@ -21,12 +21,11 @@ BLACK: tuple[int] = (0, 0, 0)
 WHITE: tuple[int] = (255, 255, 255)
 
 
-class Bird(object):
+class Bird(pygame.sprite.Sprite):
     """
     Represents the bird character in the game.
-
-    Holds position, velocity, gravity, jump force and the drawing surface. Provides
-    core behaviors: per-frame movement with gravity, jumping on input, and rendering.
+    
+    Inherits from pygame.sprite.Sprite for collision detection.
     """
 
     def __init__(self: Bird, x: int, y: int, surface: pygame.Surface) -> None:
@@ -38,12 +37,18 @@ class Bird(object):
             y (int): Initial y coordinate in pixels.
             surface (pygame.Surface): Surface used to render the bird.
         """
+        super().__init__()
         self.__x = x
         self.__y = y
         self.__velocity = 0.0
         self.__gravity = 0.5
         self.__jump_force = -7.0
         self.__surface = surface
+        
+        # Set up the sprite's rect for collision detection
+        self.rect = self.__surface.get_rect()
+        self.rect.x = x
+        self.rect.y = y
 
     def movement(self: Bird) -> None:
         """
@@ -51,6 +56,7 @@ class Bird(object):
         - Apply gravity to velocity.
         - Update position by current velocity.
         - Clamp the bird within the top and bottom screen bounds.
+        - Update the sprite's rect position.
         """
         self.__velocity += self.__gravity
         self.__y += self.__velocity
@@ -60,9 +66,13 @@ class Bird(object):
             self.__y = SCREEN_HEIGHT - self.__surface.get_height()
             self.__velocity = 0.0
 
-        #  Otherwise
+        # Prevent bird from going above the screen
         if self.__y <= 0:
             self.__y = 0
+            
+        # Update the sprite's rect position
+        self.rect.x = self.__x
+        self.rect.y = self.__y
 
     def jump(self: Bird) -> None:
         """
@@ -95,16 +105,78 @@ class Bird(object):
         return self.__velocity
 
 
-class Pipe(object):
+class Pipe(pygame.sprite.Sprite):
     """
-    Represents a pair of pipes (top and bottom) separated by a vertical gap.
-
-    Each pipe pair has an x position, a width, a gap size, and a horizontal
-    leftward speed. Two `pygame.Rect` objects are kept for drawing and collision.
+    Represents a single pipe (top or bottom) for collision detection.
+    
+    Inherits from pygame.sprite.Sprite for collision detection.
     """
 
     def __init__(
         self: Pipe,
+        x: int,
+        y: int,
+        width: float,
+        height: float,
+        speed: float,
+        color: tuple[int] = GREEN,
+    ) -> None:
+        """
+        Initialize a pipe.
+
+        Args:
+            x (int): Initial x coordinate of the pipe in pixels.
+            y (int): Initial y coordinate of the pipe in pixels.
+            width (float): Width of the pipe in pixels.
+            height (float): Height of the pipe in pixels.
+            speed (float): Leftward movement speed in pixels per frame.
+            color (tuple[int]): RGB color of the pipe.
+        """
+        super().__init__()
+        self.__x = x
+        self.__y = y
+        self.__width = width
+        self.__height = height
+        self.__speed = speed
+        self.__color = color
+
+        # Set up the sprite's rect for collision detection
+        self.rect = pygame.Rect(x, y, width, height)
+
+    def update(self: Pipe) -> None:
+        """
+        Advance the pipe leftward by its current speed and update rect.
+        """
+        # Move pipe to the left
+        self.__x -= self.__speed
+        
+        # Update Rect position
+        self.rect.x = self.__x
+
+    def draw(self: Pipe, screen: pygame.Surface) -> None:
+        """
+        Draw the pipe to the screen.
+
+        Args:
+            screen (pygame.Surface): The main display surface.
+        """
+        pygame.draw.rect(screen, self.__color, self.rect)
+
+    @property
+    def speed(self: float) -> float:
+        """Return the current leftward speed in pixels per frame."""
+        return self.__speed
+
+
+class PipePair:
+    """
+    Manages a pair of pipes (top and bottom) separated by a vertical gap.
+    
+    This class creates and manages two Pipe sprites for collision detection.
+    """
+
+    def __init__(
+        self: PipePair,
         x: int,
         width: float,
         gap: float,
@@ -135,55 +207,44 @@ class Pipe(object):
         # Calculate the bottom pipe height
         self.__bottom_pipe_height = SCREEN_HEIGHT - self.__gap - self.__top_pipe_height
 
-        # Create Rect objects for collision detection
-        self.__top_pipe_rect = pygame.Rect(
-            self.__x, 0, self.__width, self.__top_pipe_height
+        # Create Pipe sprites for collision detection
+        self.top_pipe = Pipe(
+            self.__x, 0, self.__width, self.__top_pipe_height, self.__speed, self.__color
         )
-        self.__bottom_pipe_rect = pygame.Rect(
+        self.bottom_pipe = Pipe(
             self.__x,
             self.__top_pipe_height + self.__gap,
             self.__width,
             self.__bottom_pipe_height,
+            self.__speed,
+            self.__color,
         )
 
-    def update(self: Pipe) -> None:
+    def update(self: PipePair) -> None:
         """
-        Advance the pipe pair leftward by its current speed and update rects.
+        Update both pipes in the pair.
         """
-        # Move pipes to the left
-        self.__x -= self.__speed
+        self.top_pipe.update()
+        self.bottom_pipe.update()
 
-        # Update Rect positions
-        self.__top_pipe_rect.x = self.__x
-        self.__bottom_pipe_rect.x = self.__x
-
-    def draw(self: Pipe, screen: pygame.Surface) -> None:
+    def draw(self: PipePair, screen: pygame.Surface) -> None:
         """
-        Draw the pipe pair to the screen.
+        Draw both pipes in the pair to the screen.
 
         Args:
             screen (pygame.Surface): The main display surface.
         """
-        # Draw the top pipe
-        pygame.draw.rect(screen, GREEN, self.__top_pipe_rect)
+        self.top_pipe.draw(screen)
+        self.bottom_pipe.draw(screen)
 
-        # Draw the bottom pipe
-        pygame.draw.rect(screen, GREEN, self.__bottom_pipe_rect)
-
-    @property
-    def speed(self: Pipe) -> float:
-        """Return the current leftward speed in pixels per frame."""
-        return self.__speed
-
-    @property
-    def top_pipe_rect(self: Pipe) -> pygame.Rect:
-        """Return the `pygame.Rect` for the top pipe (for draw/collision)."""
-        return self.__top_pipe_rect
-
-    @property
-    def bottom_pipe_rect(self: Pipe) -> pygame.Rect:
-        """Return the `pygame.Rect` for the bottom pipe (for draw/collision)."""
-        return self.__bottom_pipe_rect
+    def get_pipes(self: PipePair) -> tuple[Pipe, Pipe]:
+        """
+        Return the top and bottom pipe sprites.
+        
+        Returns:
+            tuple[Pipe, Pipe]: Top and bottom pipe sprites.
+        """
+        return self.top_pipe, self.bottom_pipe
 
 
 class PipeManager(object):
@@ -204,7 +265,7 @@ class PipeManager(object):
             speed (int): Leftward movement speed in pixels per frame.
             spawn_distance (int): Horizontal distance between consecutive pipe pairs in pixels.
         """
-        self.__pipes: list[Pipe] = []
+        self.__pipes: list[PipePair] = []
         self.__gap: int = gap
         self.__pipe_width: int = pipe_width
         self.__speed: int = speed
@@ -220,7 +281,7 @@ class PipeManager(object):
         initial_count: int = 3
         for i in range(initial_count):
             self.__pipes.append(
-                Pipe(
+                PipePair(
                     start_x + i * self.__spawn_distance,
                     self.__pipe_width,
                     self.__gap,
@@ -247,15 +308,15 @@ class PipeManager(object):
             self.__frames_since_last_spawn >= self.__spawn_interval_frames
             and self.__pipes
         ):
-            last_x: int = self.__pipes[-1].top_pipe_rect.x
+            last_x: int = self.__pipes[-1].top_pipe.rect.x
             new_x: int = max(last_x + self.__spawn_distance, SCREEN_WIDTH + 100)
             self.__pipes.append(
-                Pipe(new_x, self.__pipe_width, self.__gap, self.__speed)
+                PipePair(new_x, self.__pipe_width, self.__gap, self.__speed)
             )
             self.__frames_since_last_spawn = 0
 
         # Remove any pipes that are fully out of the screen (left side)
-        while self.__pipes and self.__pipes[0].top_pipe_rect.right < 0:
+        while self.__pipes and self.__pipes[0].top_pipe.rect.right < 0:
             self.__pipes.pop(0)
 
     def draw(self: PipeManager, screen: pygame.Surface) -> None:
@@ -267,6 +328,41 @@ class PipeManager(object):
         """
         for pipe in self.__pipes:
             pipe.draw(screen)
+            
+    def get_all_pipe_sprites(self: PipeManager) -> list[Pipe]:
+        """
+        Get all individual pipe sprites for collision detection.
+        
+        Returns:
+            list[Pipe]: List of all pipe sprites.
+        """
+        all_sprites = []
+        for pipe_pair in self.__pipes:
+            top_pipe, bottom_pipe = pipe_pair.get_pipes()
+            all_sprites.append(top_pipe)
+            all_sprites.append(bottom_pipe)
+        return all_sprites
+
+
+def check_collisions(bird: Bird, pipe_manager: PipeManager) -> bool:
+    """
+    Check for collisions between the bird and any pipes.
+    
+    Args:
+        bird (Bird): The bird sprite to check collisions for.
+        pipe_manager (PipeManager): Manager containing all pipe sprites.
+        
+    Returns:
+        bool: True if collision detected, False otherwise.
+    """
+    # Get all pipe sprites
+    pipe_sprites = pipe_manager.get_all_pipe_sprites()
+    
+    # Check for collision using pygame's sprite collision detection
+    if pygame.sprite.spritecollideany(bird, pipe_sprites):
+        return True
+    
+    return False
 
 
 def draw_window(screen: pygame.Surface, pipe_manager: PipeManager) -> None:
@@ -389,6 +485,11 @@ def main() -> None:
 
         # Handle keys pressed
         handle_keys_pressed_events(keys_pressed)
+        
+        # Check for collisions
+        if check_collisions(bird, pipe_manager):
+            print("Game Over! Collision detected!")
+            running = False
 
         # Draw window
         draw_window(screen, pipe_manager)
