@@ -20,6 +20,27 @@ BLUE: tuple[int] = (0, 0, 255)
 BLACK: tuple[int] = (0, 0, 0)
 WHITE: tuple[int] = (255, 255, 255)
 
+# Game states
+class GameState:
+    PLAYING = "playing"
+    GAME_OVER = "game_over"
+
+# Score system
+class ScoreManager:
+    def __init__(self):
+        self.score = 0
+        self.high_score = 0
+        
+    def increment_score(self):
+        self.score += 1
+        
+    def reset_score(self):
+        self.score = 0
+        
+    def update_high_score(self):
+        if self.score > self.high_score:
+            self.high_score = self.score
+
 
 class Bird(pygame.sprite.Sprite):
     """
@@ -342,6 +363,54 @@ class PipeManager(object):
             all_sprites.append(top_pipe)
             all_sprites.append(bottom_pipe)
         return all_sprites
+        
+    def reset(self: PipeManager) -> None:
+        """
+        Reset the pipe manager to initial state.
+        """
+        self.__pipes.clear()
+        self.__frames_since_last_spawn = 0
+        
+        # Spawn initial pipes
+        start_x: int = SCREEN_WIDTH + 100
+        initial_count: int = 3
+        for i in range(initial_count):
+            self.__pipes.append(
+                PipePair(
+                    start_x + i * self.__spawn_distance,
+                    self.__pipe_width,
+                    self.__gap,
+                    self.__speed,
+                )
+            )
+
+
+def draw_score(screen: pygame.Surface, score_manager: ScoreManager) -> None:
+    """
+    Draw the current score in the top left corner.
+    
+    Args:
+        screen (pygame.Surface): The main display surface.
+        score_manager (ScoreManager): The score manager containing current score.
+    """
+    # Initialize font module if not already done
+    if not pygame.font.get_init():
+        pygame.font.init()
+    
+    try:
+        font = pygame.font.SysFont('arial', 36)
+    except:
+        try:
+            font = pygame.font.Font(None, 36)
+        except:
+            font = None
+    
+    if font:
+        score_text = font.render(f"Score: {score_manager.score}", True, BLACK)
+        screen.blit(score_text, (20, 20))
+    else:
+        # Draw simple score indicator if font fails
+        pygame.draw.rect(screen, BLACK, (20, 20, 100, 30))
 
 
 def check_collisions(bird: Bird, pipe_manager: PipeManager) -> bool:
@@ -365,7 +434,120 @@ def check_collisions(bird: Bird, pipe_manager: PipeManager) -> bool:
     return False
 
 
-def draw_window(screen: pygame.Surface, pipe_manager: PipeManager) -> None:
+def draw_game_over_menu(screen: pygame.Surface, score_manager: ScoreManager) -> None:
+    """
+    Draw the game over menu with restart and exit options.
+    
+    Args:
+        screen (pygame.Surface): The main display surface.
+        score_manager (ScoreManager): The score manager containing final score.
+    """
+    # Semi-transparent overlay
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(128)
+    overlay.fill(BLACK)
+    screen.blit(overlay, (0, 0))
+    
+    # Initialize font module if not already done
+    if not pygame.font.get_init():
+        pygame.font.init()
+    
+    # Game over text
+    try:
+        font = pygame.font.SysFont("arial", 55)
+    except:
+        try:
+            font = pygame.font.Font(None, 55)
+        except:
+            # Fallback: create a simple text surface without custom font
+            font = None
+    
+    if font:
+        game_over_text = font.render("GAME OVER", True, RED)
+        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        screen.blit(game_over_text, text_rect)
+        
+        # Final score text
+        score_text = font.render(f"Final Score: {score_manager.score}", True, WHITE)
+        score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 80))
+        screen.blit(score_text, score_rect)
+        
+        # High score text
+        high_score_text = font.render(f"High Score: {score_manager.high_score}", True, WHITE)
+        high_score_rect = high_score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20))
+        screen.blit(high_score_text, high_score_rect)
+    else:
+        # Draw simple text using basic shapes if font fails
+        pygame.draw.rect(screen, RED, (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 200, 300, 50))
+        pygame.draw.rect(screen, WHITE, (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 130, 300, 50))
+        pygame.draw.rect(screen, WHITE, (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 70, 300, 50))
+    
+    # Menu options
+    try:
+        font_small = pygame.font.SysFont('arial', 40)
+    except:
+        try:
+            font_small = pygame.font.Font(None, 40)
+        except:
+            font_small = None
+    
+    if font_small:
+        # Restart option
+        restart_text = font_small.render("Press R to Restart", True, WHITE)
+        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))
+        screen.blit(restart_text, restart_rect)
+        
+        # Exit option
+        exit_text = font_small.render("Press ESC to Exit", True, WHITE)
+        exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+        screen.blit(exit_text, exit_rect)
+    else:
+        # Draw simple menu options using basic shapes if font fails
+        pygame.draw.rect(screen, WHITE, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 5, 200, 30))
+        pygame.draw.rect(screen, WHITE, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 55, 200, 30))
+
+
+def handle_game_over_input(keys_pressed: pygame.key.ScancodeWrapper) -> str:
+    """
+    Handle input during game over menu.
+    
+    Args:
+        keys_pressed (pygame.key.ScancodeWrapper): Pressed state of all keys.
+        
+    Returns:
+        str: Action to take - "restart", "exit", or "none"
+    """
+    if keys_pressed[pygame.K_r]:
+        return "restart"
+    elif keys_pressed[pygame.K_ESCAPE]:
+        return "exit"
+    return "none"
+
+
+def reset_game(bird: Bird, pipe_manager: PipeManager, score_manager: ScoreManager) -> None:
+    """
+    Reset the game to initial state.
+    
+    Args:
+        bird (Bird): The bird object to reset.
+        pipe_manager (PipeManager): The pipe manager to reset.
+        score_manager (ScoreManager): The score manager to reset.
+    """
+    # Reset bird position and velocity
+    bird.__x = 70
+    bird.__y = 90
+    bird.__velocity = 0.0
+    bird.rect.x = 70
+    bird.rect.y = 90
+    
+    # Reset pipe manager using its reset method
+    pipe_manager.reset()
+    
+    # Reset score
+    score_manager.reset_score()
+
+
+def draw_window(screen: pygame.Surface, pipe_manager: PipeManager, game_state: str = GameState.PLAYING, score_manager: ScoreManager = None) -> None:
     """
     Render and present the current frame of the game.
 
@@ -375,6 +557,8 @@ def draw_window(screen: pygame.Surface, pipe_manager: PipeManager) -> None:
     Args:
         screen (pygame.Surface): The main display surface.
         pipe_manager (PipeManager): Manager responsible for drawing all pipes.
+        game_state (str): Current state of the game.
+        score_manager (ScoreManager): Score manager for displaying score.
     """
     # Fill the screen with background
     screen.fill(WHITE)
@@ -384,6 +568,14 @@ def draw_window(screen: pygame.Surface, pipe_manager: PipeManager) -> None:
 
     # Draw bird to the screen
     bird.draw(screen)
+    
+    # Draw score during gameplay
+    if game_state == GameState.PLAYING and score_manager:
+        draw_score(screen, score_manager)
+    
+    # Draw game over menu if game is over
+    if game_state == GameState.GAME_OVER and score_manager:
+        draw_game_over_menu(screen, score_manager)
 
     # Update the screen
     pygame.display.flip()
@@ -441,6 +633,7 @@ def main() -> None:
     The loop continues until exit; then the display module is shut down.
     """
     pygame.display.init()
+    pygame.font.init()  # Initialize font module
 
     running: bool = True
 
@@ -460,9 +653,18 @@ def main() -> None:
         gap=200, pipe_width=80, speed=4, spawn_distance=300
     )
 
+    # Initialize ScoreManager
+    score_manager: ScoreManager = ScoreManager()
+
     # Initialize Bird object
     global bird
     bird = Bird(70, 90, bird_surface)
+    
+    # Game state
+    game_state = GameState.PLAYING
+    
+    # Track last pipe passed for scoring
+    last_pipe_passed = None
 
     # Game loop
     while running:
@@ -477,22 +679,40 @@ def main() -> None:
 
         # Get keys pressed
         keys_pressed: pygame.key.ScancodeWrapper = pygame.key.get_pressed()
-
-        # Movement
-        bird.movement()
-
-        pipe_manager.update()
-
-        # Handle keys pressed
-        handle_keys_pressed_events(keys_pressed)
         
-        # Check for collisions
-        if check_collisions(bird, pipe_manager):
-            print("Game Over! Collision detected!")
-            running = False
+        if game_state == GameState.PLAYING:
+            # Movement
+            bird.movement()
+
+            pipe_manager.update()
+
+            # Handle keys pressed
+            handle_keys_pressed_events(keys_pressed)
+            
+            # Check for scoring (when bird passes a pipe)
+            for pipe_pair in pipe_manager._PipeManager__pipes:
+                if (pipe_pair.top_pipe.rect.right < bird.rect.left and 
+                    pipe_pair != last_pipe_passed):
+                    score_manager.increment_score()
+                    last_pipe_passed = pipe_pair
+            
+            # Check for collisions
+            if check_collisions(bird, pipe_manager):
+                score_manager.update_high_score()
+                game_state = GameState.GAME_OVER
+                
+        elif game_state == GameState.GAME_OVER:
+            # Handle input in game over menu
+            action = handle_game_over_input(keys_pressed)
+            if action == "restart":
+                reset_game(bird, pipe_manager, score_manager)
+                game_state = GameState.PLAYING
+                last_pipe_passed = None
+            elif action == "exit":
+                running = False
 
         # Draw window
-        draw_window(screen, pipe_manager)
+        draw_window(screen, pipe_manager, game_state, score_manager)
 
     # Look at the name
     pygame.display.quit()
